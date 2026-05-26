@@ -1,0 +1,18 @@
+Linear Equations - Slope Intercept Form
+
+y = mx + b
+y = the output value (vertical axis)
+m = slope (how steep the line is)
+x = the input value (horizontal axis)
+b = y-intercept (where the line crosses the y-axis)
+
+To find slope between two points:
+m = (y2 - y1) / (x2 - x1)
+
+Example:
+Line with slope 2 and y-intercept 3: y = 2x + 3
+When x = 4: y = 2(4) + 3 = 11
+
+Parallel lines have equal slopes.
+Perpendicular lines have slopes that are negative reciprocals.
+Example: slope of 2 and slope of -1/2 are perpendicular.

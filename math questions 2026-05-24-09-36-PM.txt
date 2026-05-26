@@ -1,0 +1,19 @@
+Topic Title: Finding Slope from Two Points
+Q: Find the slope of the line that passes through the points (3, 5) and (7, 13).
+A:
+
+Topic Title: Finding Slope from Two Points
+Q: Find the slope of the line that passes through the points (-2, 4) and (1, -5).
+A:
+
+Topic Title: Perpendicular Line Slopes
+Q: If a line has a slope of 2/3, what is the slope of a line perpendicular to it?
+A:
+
+Topic Title: Perpendicular Line Slopes
+Q: A line is defined by the equation y = -5x + 8. What is the slope of a line that runs perpendicular to this line?
+A:
+
+Topic Title: Finding Slope from Two Points, Perpendicular Line Slopes
+Q: First, find the slope of the line passing through the points (2, -1) and (5, 5). Then, write the slope of a line that is perpendicular to it.
+A:

@@ -1,0 +1,39 @@
+Weakness Ranking
+==================================================
+  
+Finding Slope from Two Points
+Total: 4 | Correct: 0 | Partially Correct: 1 | Incorrect: 1 |
+ Percentage Correct: 0% | Percentage Correct or Partially Correct: 25% | Weighted Average: 0.17
+  Trend: Worsen ↓
+  History:
+     2026-05-24-10-02: [█░░░░░░░░░] 0.2  Incorrect
+     2026-05-24-09-35: [█████░░░░░] 0.5  Partially Correct
+  
+Perpendicular Line Slopes
+Total: 3 | Correct: 1 | Partially Correct: 0 | Incorrect: 1 |
+ Percentage Correct: 33% | Percentage Correct or Partially Correct: 33% | Weighted Average: 0.33
+  Trend: Improvement ↑
+  History:
+     2026-05-24-10-02: [██████████] 1.0  Correct
+     2026-05-24-09-35: [░░░░░░░░░░] 0.0  Incorrect
+  
+Writing Slope-Intercept Equations
+Total: 1 | Correct: 1 | Partially Correct: 0 | Incorrect: 0 |
+ Percentage Correct: 100% | Percentage Correct or Partially Correct: 100% | Weighted Average: 1.00
+  Trend: Needs more data
+  History:
+     2026-05-24-09-35: [██████████] 1.0  Correct
+  
+Evaluating Linear Equations
+Total: 1 | Correct: 1 | Partially Correct: 0 | Incorrect: 0 |
+ Percentage Correct: 100% | Percentage Correct or Partially Correct: 100% | Weighted Average: 1.00
+  Trend: Needs more data
+  History:
+     2026-05-24-09-35: [██████████] 1.0  Correct
+  
+Parallel Line Slopes
+Total: 1 | Correct: 1 | Partially Correct: 0 | Incorrect: 0 |
+ Percentage Correct: 100% | Percentage Correct or Partially Correct: 100% | Weighted Average: 1.00
+  Trend: Needs more data
+  History:
+     2026-05-24-09-35: [██████████] 1.0  Correct
