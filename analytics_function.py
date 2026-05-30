@@ -3,7 +3,7 @@ from datetime import datetime
 
 import os
 
-def extract_topics(text):
+def extract_topics(text: str) -> list[str]:
     list_topics = []
     lines = text.split("\n")
     for line in lines:
@@ -19,7 +19,7 @@ def extract_topics(text):
     return list_topics
                 
 
-def extract_grades(text):
+def extract_grades(text: str) -> list[str]:
     list_grades = []
     lines = text.split("\n")
     for line in lines:
@@ -29,13 +29,13 @@ def extract_grades(text):
             list_grades.append(grade)
     return list_grades
 
-def get_topics_and_grades(text):
+def get_topics_and_grades(text: str) -> list[tuple[str, str]]:
     topics = extract_topics(text)
     grades = extract_grades(text)
     topics_and_grades = list(zip(topics, grades))
     return topics_and_grades
 
-def get_stats(records):
+def get_stats(records: list[dict[str, any]]) -> dict[str, any] | None:
     total = sum(r["count"] for r in records)
    
     if total == 0:
@@ -59,12 +59,12 @@ def get_stats(records):
         "weighted": weighted_average
             }
 
-def score_bar(score, width=10):
+def score_bar(score: float, width: int = 10) -> str:
     filled = int(score * width)
     empty = width - filled
     return "[" + "█" * filled + "░" * empty + "]"
 
-def get_trend(records):
+def get_trend(records: list[dict[str, any]]) -> str:
     records_sorted = sorted(records, key=lambda r: r["date"])
     
     if len (records_sorted) < 2:
@@ -84,11 +84,12 @@ def get_trend(records):
     else:
         return "No Change →"
 
-def generate_report(topic_groups):
+def generate_report(topic_groups: dict[str, any]) -> str:
     topic_with_stats = []
     for topic, records in topic_groups.items():
         stats = get_stats(records)
-        topic_with_stats.append((topic, records, stats))
+        if stats is not None:
+            topic_with_stats.append((topic, records, stats))
 
     topic_with_stats.sort(key=lambda x: x[2]['weighted'])
     
@@ -110,7 +111,7 @@ def generate_report(topic_groups):
             lines.append(f"     {record['date']}: {bar} {record['score']:.1f}  {record['grade']}")
     return "\n".join(lines)
 
-def run_analytics():
+def run_analytics() -> None:
   
     today = datetime.now().strftime("%Y-%m-%d-%I-%M-%p")
 
@@ -120,22 +121,32 @@ def run_analytics():
 
     for file in file_names:
         if file.startswith("graded"):
-            with open(file, "r") as f:
-                contents = f.read()
-                file_name_stripped = file.strip()
-                file_name_parts = file_name_stripped.split(" ")
-                answers_index = file_name_parts.index("answers")
-                date_with_suffix = " ".join(file_name_parts[answers_index + 1:])
-                date = date_with_suffix.removesuffix(".txt").strip()
-                graded_index = file_name_parts.index("graded")
-                subject = " ".join(file_name_parts[graded_index + 1:answers_index])
-                topics = get_topics_and_grades(contents)
-                grade_data.append({
-                    "filename": file,
-                    "subject": subject,
-                    "date": date,
-                    "topics": topics
-                })
+            try:
+                with open(file, "r") as f:
+                    contents = f.read()
+                    file_name_stripped = file.strip()
+                    file_name_parts = file_name_stripped.split(" ")
+                    try:
+                        answers_index = file_name_parts.index("answers")
+                    except ValueError:
+                        print(f"Warning: Skipping '{file}' — unexpected filename format.")
+                        continue
+                    date_with_suffix = " ".join(file_name_parts[answers_index + 1:])
+                    date = date_with_suffix.removesuffix(".txt").strip()
+                    graded_index = file_name_parts.index("graded")
+                    subject = " ".join(file_name_parts[graded_index + 1:answers_index])
+                    topics = get_topics_and_grades(contents)
+                    grade_data.append({
+                        "filename": file,
+                        "subject": subject,
+                        "date": date,
+                        "topics": topics
+                    })
+            except ValueError:
+                print(f"Warning: Skipping '{file}' — unexpected filename format.")
+    if not grade_data:
+        print("No graded files found. Please remember title formating for graded documents is 'graded subject answers today' (e.g. graded math answers 2026-05-25-11-04-AM.txt)")
+        exit()
 
     all_records = []
 
