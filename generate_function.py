@@ -379,6 +379,7 @@ def run_generate() -> None:
         elif question_weak_focus == "n":
             weak_focus_document = ""
             ai_weak_topic_text = ""
+            break
         else:
             print("Invalid response. Please input a valid response (y/n).")
             fail_count_weak_focus += 1
