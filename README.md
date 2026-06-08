@@ -1,6 +1,6 @@
 # SFK — Strive For Knowledge
 
--
+-An AI-powered study tool built in Python using the Gemini API. Generate customized practice questions, get them graded, and track your performance over time.
 
 ## Features:
 
