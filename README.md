@@ -1,14 +1,14 @@
 # SFK — Strive For Knowledge
 
--An AI-powered study tool built in Python using the Gemini API. Generate customized practice questions, get them graded, and track your performance over time.
+- An AI-powered study tool built in Python using the Gemini API. Generate customized practice questions, get them graded, and track your performance over time.
 
 ## Features:
 
--AI powered question generation
--Customizable question count, difficulty, and type
--37 question types across analytical, written, selected response, and STEM-specific formats
--AI-powered grading with detailed feedback
--Analytics dashboard tracking topic performance and trends over time
+- AI powered question generation
+- Customizable question count, difficulty, and type
+- 37 question types across analytical, written, selected response, and STEM-specific formats
+- AI-powered grading with detailed feedback
+- Analytics dashboard tracking topic performance and trends over time
 
 ## Setup & Usage:
 
@@ -26,18 +26,18 @@
 
 ### In Development:
 
--Upload PDFs, textbook chapters, and images as source material
--Support for multiple note documents
--Auto-detect files / flexible file naming
--Question difficulty scaling tracked in analytics
--Improved analytics charts and graphs
--Session history log
+- Upload PDFs, textbook chapters, and images as source material
+- Support for multiple note documents
+- Auto-detect files / flexible file naming
+- Question difficulty scaling tracked in analytics
+- Improved analytics charts and graphs
+- Session history log
 
 ### Planned Features:
 
--Multiple user profiles
--Question flagging and favorites
--Timed quiz mode
--Recommended difficulty auto-adjustment based on performance
--Simple GUI
--Web or app availability
+- Multiple user profiles
+- Question flagging and favorites
+- Timed quiz mode
+- Recommended difficulty auto-adjustment based on performance
+- Simple GUI
+- Web or app availability
