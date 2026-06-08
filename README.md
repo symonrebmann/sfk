@@ -1,10 +1,16 @@
-# AI-Powered Personalized Study Aid
+# SFK — Strive For Knowledge
 
-## What it does:
+-
 
-  You are able to use AI to generate practice questions, answer them, have them graded, and view your progression on a wide variety of topics. This program can be used to personalize problems against your weaknesses.
+## Features:
 
-## How to use it:
+-AI powered question generation
+-Customizable question count, difficulty, and type
+-37 question types across analytical, written, selected response, and STEM-specific formats
+-AI-powered grading with detailed feedback
+-Analytics dashboard tracking topic performance and trends over time
+
+## Setup & Usage:
 
   You first need to install the required libraries. You can do this by running the following in the Python console:
 	```
@@ -18,18 +24,20 @@
 
 ## Future plans:
 
-### Quality Improvements:
+### In Development:
 
--Ability to customize the amount of questions
--Ability to change question difficulty
--Ability to choose question variety (MCQ, short answer, etc.)
+-Upload PDFs, textbook chapters, and images as source material
+-Support for multiple note documents
+-Auto-detect files / flexible file naming
+-Question difficulty scaling tracked in analytics
+-Improved analytics charts and graphs
+-Session history log
 
-### Optimize:
+### Planned Features:
 
--Ability to use multiple formats for naming notes, questions, etc.
--Auto-detect files
-
-### Polish
-
--Simple UI
--Better charts and graphs for analytics
+-Multiple user profiles
+-Question flagging and favorites
+-Timed quiz mode
+-Recommended difficulty auto-adjustment based on performance
+-Simple GUI
+-Web or app availability
