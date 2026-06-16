@@ -3,6 +3,9 @@ from google import genai
 from dotenv import load_dotenv
 import os
 from datetime import datetime
+from database import entry_sessions, entry_questions, entry_session_subjects, cursor
+import pdfplumber
+import PIL.Image
 
 load_dotenv(".env.txt")
 
@@ -13,15 +16,22 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-def generate_questions(notes: str, weak_focus_document: str, ai_weak_topic_text: str, question_amount: int, ai_instructions: str, essay_topic_instruction: str | None, question_difficulty_prompt: str) -> str:
+def generate_questions(notes: str, weak_topics: str, ai_weak_topic_text: str, question_amount: int, ai_instructions: str, essay_topic_instruction: str | None, question_difficulty_prompt: str) -> str:
     prompt = f"""
-    You are a study assistant. Based on these notes-and if there are any weak topics-generate {question_amount} practice questions. {essay_topic_instruction}
+    You are a study assistant. Based on these notes-and if there are any weak topics-generate {question_amount} practice questions. You must generate exactly {question_amount} questions. No more, no less. {essay_topic_instruction}
     {ai_instructions}
     Please write the questions to these difficulty specifications. {question_difficulty_prompt}
+    STRICT ENFORCEMENT:
+    You must strictly follow the Core Rule for Question Type. Do NOT generate any question formats 
+    mentioned in the Difficulty Level Rule if they contradict the requested format. For example, if the 
+    Question Type is 'Problem-Solving', do NOT under any circumstances generate Multiple Choice, 
+    True/False, or Matching questions, even if they are mentioned in the difficulty description.
     For each question, and provide a space for answering but do not include the answer.
-    Start directly with topic title listing all covered topics seperated by commas in the order of which they are asked in each question at the top of your response.
+    Start directly with topic title listing all covered topics seperated by commas in the order of which they are asked in each question at the top of your response. Topic names must be short—a maximum of 5 words. Do not combine multiple topics (such as x and z) as one topic.
+    As well, include the topic title directly above each question. When listing the topic above each question JUST list that question's topic. The Topic Title above each question must contain exactly one topic with no commas.
     As well, please list the question difficulty above each question a shown in the example below.
-    Do not include any extra introduction or explanation other than what's listed.
+    The parts in brackets such as "[topic]," "[difficulty]," "[question]," and "[answer space]" are place holders. Replace those with the relevant information and DONT leave the brackets.
+    Do NOT include any extra introduction, explanation, or information other than what's listed.
     Format each one as:
     Topic Title: [topic]
     Question Difficulty: [difficulty]
@@ -31,15 +41,22 @@ def generate_questions(notes: str, weak_focus_document: str, ai_weak_topic_text:
     Notes:
     {notes}
     {ai_weak_topic_text}
-    {weak_focus_document}
+    {weak_topics}
     """
-    response = client.models.generate_content(
-        model = "gemini-3.5-flash",
-        contents = prompt
-    )
+    try:
+        response = client.models.generate_content(
+            model = "gemini-3.5-flash",
+            contents = prompt
+        )
+    except Exception as e:
+        if "503" in str(e):
+            print("Gemini is currently unavailable due to high demand. Please try again in a moment.")
+        else:
+            print(f"Generation failed: {e}")
+
     return response.text
 
-def get_question_type() -> tuple[str, str | None]:
+def get_question_type() -> tuple[str, str | None, str]:
 
     question_format_dict = {
         "1": ["1. Analogy", "2. Categorization/Sorting", "3. Cause and Effect", "4. Error Identification", "5. Interpretation", "6. Prediction", "7. Back"],
@@ -77,8 +94,18 @@ def get_question_type() -> tuple[str, str | None]:
                     exit()
 
         fail_count_question_type = 0
-        question_category = None
-        go_back = False
+        if question_format == "1":
+            question_category = "Analytical"
+        elif question_format == "2":
+            question_category = "Extended Written Response"
+        elif question_format == "3":
+            question_category = "Selected Response"
+        elif question_format == "4":
+            question_category = "Short Written Response"
+        elif question_format == "5":
+            question_category = "STEM-Specific"
+        else:
+            question_category = None
 
         while True:
             print("Question Types:")
@@ -94,7 +121,7 @@ def get_question_type() -> tuple[str, str | None]:
                     if question_type.split(".")[1].strip() == "Back":
                         go_back = True
                         break
-                    return get_instructions(question_type, question_category)
+                    return get_instructions(question_type), question_category, question_type
                 elif isinstance(content, dict):
                     keys = list(content.keys())
                     if response_type == 1:
@@ -106,7 +133,7 @@ def get_question_type() -> tuple[str, str | None]:
                             go_back = True
                             continue
                         question_category = "Essay"
-                        return get_instructions(question_type, question_category)
+                        return get_instructions(question_type), question_category, question_type
                     elif response_type == 2:
                         print("Question subtypes:")
                         print("\n".join(content["2. Free Response"]))
@@ -116,16 +143,16 @@ def get_question_type() -> tuple[str, str | None]:
                             go_back = True
                             continue
                         question_category = "Free Response"
-                        return get_instructions(question_type, question_category)
+                        return get_instructions(question_type), question_category, question_type
                     elif response_type == 3:
                         question_type = "3. Peer Review"
-                        return get_instructions(question_type, question_category)
+                        return get_instructions(question_type), question_category, question_type
                     elif response_type == 4:
                         question_type = "4. Research/Find"
-                        return get_instructions(question_type, question_category)
+                        return get_instructions(question_type), question_category, question_type
                     elif response_type == 5:
                         question_type = "5. Scenario/Case Study"
-                        return get_instructions(question_type, question_category)
+                        return get_instructions(question_type), question_category, question_type
                     elif keys[response_type - 1].split(".")[1].strip() == "Back":
                         go_back = True
                         break
@@ -140,7 +167,7 @@ def get_question_type() -> tuple[str, str | None]:
                 exit()
     
 
-def get_instructions(question_type: str, question_category: str) -> tuple[str, str | None]:
+def get_instructions(question_type: str) -> str:
     
     instructions = {
     "Analogy": "Please generate all the questions in an analogy format. Present a relationship between two concepts (from the notes) and ask the student to identify or complete a similar relationship.",
@@ -186,30 +213,16 @@ def get_instructions(question_type: str, question_category: str) -> tuple[str, s
 
     ai_instructions = instructions[fixed_question_type]
 
-    return ai_instructions, question_category
+    return ai_instructions
 
-def get_question_amount(question_category: str | None) -> tuple[int, int | None]:
+def get_question_amount(question_category: str | None) -> tuple[int, int | None, str]:
     
     fail_count_question_amount = 0
 
     topic_amount = None
 
     while fail_count_question_amount < 3:
-        if question_category is None:
-            try:
-                question_amount = int(input("How many questions would you like? "))
-                if question_amount > 25:
-                    print("Error: Too many questions. Please try an amount 25 or under.")
-                    fail_count_question_amount += 1
-                elif question_amount <= 0:
-                    print("Error: Please enter a positive integer.")
-                    fail_count_question_amount += 1
-                else:                    
-                    break
-            except ValueError:
-                print("Error: Please enter a valid integer.")
-                fail_count_question_amount += 1   
-        elif question_category == "Essay":
+        if question_category == "Essay":
             try:
                 question_amount = int(input("How many questions would you like? "))
                 topic_amount = int(input("How many essay topics would you like to be able to choose from (per question)? "))
@@ -241,13 +254,27 @@ def get_question_amount(question_category: str | None) -> tuple[int, int | None]
             except ValueError:
                 print("Error: Please enter a valid integer.")
                 fail_count_question_amount += 1   
+        else:
+            try:
+                question_amount = int(input("How many questions would you like? "))
+                if question_amount > 25:
+                    print("Error: Too many questions. Please try an amount 25 or under.")
+                    fail_count_question_amount += 1
+                elif question_amount <= 0:
+                    print("Error: Please enter a positive integer.")
+                    fail_count_question_amount += 1
+                else:                    
+                    break
+            except ValueError:
+                print("Error: Please enter a valid integer.")
+                fail_count_question_amount += 1   
     if fail_count_question_amount >= 3:
         print("Too many failed attempts. Exiting.")
         exit()
 
     return question_amount, topic_amount
 
-def question_difficulty() -> str:
+def question_difficulty() -> tuple[str, int]:
     fail = 0
     while fail < 3:
         try:
@@ -261,13 +288,13 @@ def question_difficulty() -> str:
             else:
                 fail_2 = 0
                 while fail_2 < 3:
-                    diff_confirm = input(f"Are you sure you want a difficulty of {difficulty}/10? ").strip().lower()
-                    if diff_confirm == "yes":
-                        return get_difficulty_prompt(difficulty)
-                    if diff_confirm == "no":
+                    diff_confirm = input(f"Are you sure you want a difficulty of {difficulty}/10? (y/n): ").strip().lower()
+                    if diff_confirm == "y":
+                        return get_difficulty_prompt(difficulty), difficulty
+                    if diff_confirm == "n":
                         break
                     else:
-                        print("Please enter yes or no.")
+                        print("Please choose y/n.")
                         fail_2 += 1
                         continue
                 if fail_2 >= 3:
@@ -336,90 +363,236 @@ the student to reconcile apparent contradictions or solve highly complex, abstra
 
     return difficulty_prompt
 
+def get_notes_document() -> tuple[str, str, str, list[str]]:
+
+    topic_groups = {}
+    topic_averages = []
+
+    all_notes = []
+    all_subjects = []
+
+    file_names = os.listdir(".")
+
+    note_check = {"notes", "note", "chapter", "unit", "lecture", "textbook", "review", "summary", "study", "guide", "handout", "slides"}
+    notes_documents = []
+
+    for file in file_names:
+        name_without_suffix = os.path.splitext(file)[0]
+        file_name_parts = set(part.lower().strip() for part in name_without_suffix.split(" "))
+        if len(list(file_name_parts & note_check)) >= 1:
+            notes_documents.append(file)
+
+    for i in range(5):
+        fail_count_notes_document = 0
+        fail_count_read_document = 0
+        fail_manual_entry = 0
+
+        notes = None
+        name_without_suffix = None
+        extension = None
+    
+        while fail_count_notes_document < 3 and fail_count_read_document < 3:
+            notes_index = 0
+            print("Notes documents: ")
+            for note in notes_documents:
+                notes_index +=1
+                print(f"{notes_index}. {note}")
+            print(f"{notes_index + 1}. Manual entry")
+
+            try:
+                notes_document = int(input("Please choose one of the above notes documents by entering the corresponding number (e.g. 1, 2, 3). "))
+                if notes_document == notes_index + 1:
+                    while fail_manual_entry < 3:
+                        manual_entry = input("Please enter the full name of the notes document (including the extension): ")
+                        notes_documents.append(manual_entry)
+                        name_without_suffix = os.path.splitext(notes_documents[notes_document - 1])[0]
+                        extension = os.path.splitext(notes_documents[notes_document - 1])[1]
+                        if extension in {".txt", ".pdf", ".png", ".jpg", ".jpeg"}:
+                            break
+                        else:
+                            print("The file was not recognized. Please try again.")
+                            fail_manual_entry += 1
+                            continue
+                    if fail_manual_entry >= 3:
+                        print("Too many failed attempts. Please try another notes document.")
+                        notes_documents.remove(manual_entry)
+                        continue
+                else:
+                    name_without_suffix = os.path.splitext(notes_documents[notes_document - 1])[0]
+                    extension = os.path.splitext(notes_documents[notes_document - 1])[1]
+            except (ValueError, IndexError):
+                print("The document chosen was not recgonized. Please try again.")
+                fail_count_notes_document +=1
+                continue
+            try:
+                if extension == ".txt":
+                    try:
+                        with open(f"{notes_documents[notes_document - 1]}", "r") as f:
+                            notes = f.read()
+                        break
+                    except:
+                        print("Notes extractions failed. Please try another notes document.")
+                        fail_count_read_document += 1
+                elif extension == ".pdf":
+                    try:
+                        with pdfplumber.open(notes_documents[notes_document - 1]) as pdf:
+                            notes = ""
+                            for page in pdf.pages:
+                                notes += page.extract_text()
+                        break
+                    except:
+                        print("Notes extractions failed. Please try another notes document.")
+                        fail_count_read_document += 1
+                elif extension in {".png", ".jpg", ".jpeg"}:
+                    try:
+                        image = PIL.Image.open(notes_documents[notes_document - 1])
+                        try:
+                            response = client.models.generate_content(
+                                model = "gemini-3.5-flash",
+                                contents = [image, "Extract all text from this image exactly as it appears. Return only the extracted text with no introduction, explanation, or commentary."]
+                            )
+                        except Exception as e:
+                            if "503" in str(e):
+                                print("Gemini is currently unavailable due to high demand. Please try again in a moment.")
+                            else:
+                                print(f"Generation failed: {e}")
+                        notes = response.text
+                    except:
+                        print("Notes extractions failed. Please try another notes document.")
+                        fail_count_read_document += 1
+            except FileNotFoundError:
+                print(f"Error: '{notes_document}.txt' not found. Please try again.")
+                fail_count_read_document += 1   
+        if fail_count_notes_document >= 3 or fail_count_read_document >= 3:
+            print("Too many failed attempts. Exiting.")
+            exit()
+        if notes is None or name_without_suffix is None:
+            print("Too many failed attempts. Exiting.")
+            exit()
+
+        all_notes.append(notes)
+
+        file_name_parts = name_without_suffix.split(" ")
+        filtered_parts = [part for part in file_name_parts if part.strip().lower() not in note_check]
+        subject = " ".join(filtered_parts).strip()
+
+        if subject in all_subjects:
+            continue
+        else:
+            all_subjects.append(subject)
+
+            fail_count_weak_focus = 0
+
+            while fail_count_weak_focus < 3:
+                question_weak_focus = input("Focus on weak topics? (y/n): ").strip().lower()
+                if question_weak_focus == "y":
+                    ai_weak_topic_text = "Weak Topics: "
+                    cursor.execute("""
+                        SELECT questions.question_topic, responses.grade
+                        FROM sessions                                 
+                        JOIN questions ON sessions.id = questions.session_id
+                        JOIN responses ON questions.id = responses.question_id
+                        JOIN session_subjects on sessions.id = session_subjects.session_id
+                        WHERE session_subjects.subject = ?
+                        """, (subject,))
+                        
+                    for row in cursor.fetchall():
+                        topic = row[0]
+                        grade = row[1]
+
+                        if grade == "Correct":
+                            score = 1.0
+                        elif grade == "Partially Correct":
+                            score = .5
+                        else:
+                            score = 0.0
+                            
+                        if topic not in topic_groups:
+                            topic_groups[topic] = []
+                        topic_groups[topic].append({
+                                "grade": grade,
+                                "score": score
+                        })
+                    break
+                elif question_weak_focus == "n":
+                    weak_topics = []
+                    ai_weak_topic_text = ""
+                    break
+                else:
+                    print("Invalid response. Please input a valid response (y/n).")
+                    fail_count_weak_focus += 1
+            if fail_count_weak_focus >= 3:
+                print("Too many failed attempts. Exiting.")
+                exit()
+        
+        more_notes_fail = 0
+
+        more_notes = input("Would you like to add another document? (y/n): ").strip().lower()
+        while more_notes_fail < 3:
+            if more_notes == "n":
+                more_notes_final = False
+                break
+            elif more_notes == "y":
+                more_notes_final = True
+                break
+            else:
+                print("Invalid response. Please input a valid response (y/n).")
+                more_notes_fail += 1
+        
+        if more_notes_final is False:
+            break
+        else: 
+            continue
+            
+    for topic, records in topic_groups.items():
+        avg = sum(r["score"] for r in records) / len(records)
+        topic_averages.append((topic, avg))
+
+    topic_averages.sort(key=lambda x: x[1])
+    weak_topics_unformatted = [topic for topic, avg in topic_averages[:10]]
+    weak_topics = "\n".join(f"- {topic}" for topic in weak_topics_unformatted)
+
+    notes = "\n\n".join(all_notes)
+
+    return notes, weak_topics, ai_weak_topic_text, all_subjects
+
 def run_generate() -> None:
 
     today = datetime.now().strftime("%Y-%m-%d-%I-%M-%p")
 
-    fail_count_notes_document = 0
+    notes, weak_topics, ai_weak_topic_text, all_subjects = get_notes_document()
 
-    while fail_count_notes_document < 3:
-        notes_document = input("Please input note textfile name: ")
-        try:
-            with open(f"{notes_document}.txt", "r") as f:
-                notes = f.read()
-                break
-        except FileNotFoundError:
-            print(f"Error: '{notes_document}.txt' not found. Please try again.")
-            fail_count_notes_document += 1   
-    if fail_count_notes_document >= 3:
-        print("Too many failed attempts. Exiting.")
-        exit()
-
-    fail_count_weak_focus = 0
-    fail_count_weak_focus_2 = 0
-    weak_topic_success = False
-
-    while fail_count_weak_focus < 3:
-        question_weak_focus = input("Focus on weak topics? (y/n): ").strip().lower()
-        if question_weak_focus == "y":
-            while fail_count_weak_focus_2 < 3:
-                weak_focus_document_name = input("Please input weak topic textfile name: ")
-                ai_weak_topic_text = "Weak Topics: "
-                try:
-                    with open(f"{weak_focus_document_name}.txt", "r") as f:
-                        weak_focus_document = f.read()
-                        weak_topic_success = True
-                    break
-                except FileNotFoundError:
-                    print(f"Error: '{weak_focus_document_name}.txt' not found. Please try again.")
-                    fail_count_weak_focus_2 += 1   
-            if fail_count_weak_focus_2 >= 3:
-                print("Too many failed attempts. Exiting.")
-                exit()
-        elif question_weak_focus == "n":
-            weak_focus_document = ""
-            ai_weak_topic_text = ""
-            break
-        else:
-            print("Invalid response. Please input a valid response (y/n).")
-            fail_count_weak_focus += 1
-        if weak_topic_success:
-            break
-    if fail_count_weak_focus >= 3:
-        print("Too many failed attempts. Exiting.")
-        exit()
-
-    ai_instructions, question_category = get_question_type() 
+    ai_instructions, question_category, question_type = get_question_type() 
 
     question_amount, topic_amount = get_question_amount(question_category)
-    question_difficulty_prompt = question_difficulty()
+    question_difficulty_prompt, difficulty = question_difficulty()
 
     if topic_amount is None:
         essay_topic_instruction = None
     else:
         essay_topic_instruction = f"For each essay question give the choice of {topic_amount} different topic questions"
 
-    notes_title_stripped = notes_document.strip().lower()
-    part_notes_title = notes_title_stripped.split(" ")
-    try:
-        notes_word_index = part_notes_title.index("notes")
-    except ValueError:
-        print("Error: Notes filename must contain the word 'notes.'")
-        exit()
-    subject_parts = part_notes_title[:notes_word_index]
-    if not subject_parts:
-        print("Error: Could not determine subject from filename. Please include a subject before 'notes (e.g. 'math notes').")
-    subject = " ".join(subject_parts).strip()
-
-    questions: str = generate_questions(notes, weak_focus_document, ai_weak_topic_text, question_amount, ai_instructions, essay_topic_instruction, question_difficulty_prompt)
+    questions: str = generate_questions(notes, weak_topics, ai_weak_topic_text, question_amount, ai_instructions, essay_topic_instruction, question_difficulty_prompt)
+    
     if questions is None:
-        print("Questions failed to generate. Please retry.")
-        exit()
-    else:
-        with open(f"{subject} questions {today}.txt", "w") as f:
-            f.write(questions)
+            print("Questions failed to generate. Please retry.")
+            exit()
 
-    print(f"Questions saved to '{subject} questions {today}.txt'")
+    session_id = entry_sessions(question_category, question_type, difficulty, today)
+    entry_session_subjects(all_subjects, session_id)
+    entry_questions(questions, session_id)
+
+    header = f"Session ID: {session_id}\n\n"
+    final_output = header + questions
+
+    if len(all_subjects) > 1:
+        subjects = " ".join(all_subjects) + " combined"
+    else:
+        subjects = all_subjects[0]
+
+    with open(f"{subjects} questions {today}.txt", "w") as f:
+        f.write(final_output)
+    print(f"Questions saved to '{subjects} questions {today}.txt'")
 
 if __name__ == "__main__":
     run_generate()

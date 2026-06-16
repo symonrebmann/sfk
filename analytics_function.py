@@ -1,42 +1,10 @@
 
 from datetime import datetime
 
-import os
-
-def extract_topics(text: str) -> list[str]:
-    list_topics = []
-    lines = text.split("\n")
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("Topic Title:"):
-            topics = stripped.replace("Topic Title:", " ").strip()
-            for t in topics.split(","):
-                list_topics.append(t.strip())
-    if not list_topics:
-        first_line = lines[0].strip()
-        for t in first_line.split(","):
-                list_topics.append(t.strip())
-    return list_topics
-                
-
-def extract_grades(text: str) -> list[str]:
-    list_grades = []
-    lines = text.split("\n")
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("G:"):
-            grade = stripped[2:].strip()
-            list_grades.append(grade)
-    return list_grades
-
-def get_topics_and_grades(text: str) -> list[tuple[str, str]]:
-    topics = extract_topics(text)
-    grades = extract_grades(text)
-    topics_and_grades = list(zip(topics, grades))
-    return topics_and_grades
+from database import cursor
 
 def get_stats(records: list[dict[str, any]]) -> dict[str, any] | None:
-    total = sum(r["count"] for r in records)
+    total = len(records)
    
     if total == 0:
         return None
@@ -87,9 +55,20 @@ def get_trend(records: list[dict[str, any]]) -> str:
 def generate_report(topic_groups: dict[str, any]) -> str:
     topic_with_stats = []
     for topic, records in topic_groups.items():
+        date_groups = {}
+        averages = []
         stats = get_stats(records)
+        for record in records:
+            if record["date"] not in date_groups:
+                date_groups[record["date"]] = []
+            date_groups[record["date"]].append(record["score"])
+        for date, scores in date_groups.items():
+            avg = sum(scores) / len(scores)
+            averages.append({"date": date, "score": avg})
         if stats is not None:
-            topic_with_stats.append((topic, records, stats))
+            topic_with_stats.append((topic, records, stats, averages))
+
+    
 
     topic_with_stats.sort(key=lambda x: x[2]['weighted'])
     
@@ -97,7 +76,7 @@ def generate_report(topic_groups: dict[str, any]) -> str:
     lines.append("Weakness Ranking")
     lines.append("=" * 50)
 
-    for topic, records, stats in topic_with_stats:
+    for topic, records, stats, averages in topic_with_stats:
         trend = get_trend(records)
         lines.append("  ")
         lines.append(topic)
@@ -106,105 +85,61 @@ def generate_report(topic_groups: dict[str, any]) -> str:
         lines.append(f"  Trend: {trend}")
         lines.append("  History:")
 
-        for record in sorted(records, key = lambda r: r["date"], reverse = True):
-            bar = score_bar(record["score"])
-            lines.append(f"     {record['date']}: {bar} {record['score']:.1f}  {record['grade']}")
+        for entry in sorted(averages, key = lambda r: r["date"], reverse = True):
+            bar = score_bar(entry["score"])
+            if entry["score"] >= .8:
+                g = "Correct"
+            elif .8 > entry["score"] >= .4:
+                g = "Partially Correct"
+            else:
+                g = "Incorrect"
+            lines.append(f"     {entry['date']}: {bar} {entry['score']:.1f}  {g}")
     return "\n".join(lines)
 
 def run_analytics() -> None:
   
     today = datetime.now().strftime("%Y-%m-%d-%I-%M-%p")
 
-    file_names = os.listdir(".")
-
-    grade_data = []
-
-    for file in file_names:
-        if file.startswith("graded"):
-            try:
-                with open(file, "r") as f:
-                    contents = f.read()
-                    file_name_stripped = file.strip()
-                    file_name_parts = file_name_stripped.split(" ")
-                    try:
-                        answers_index = file_name_parts.index("answers")
-                    except ValueError:
-                        print(f"Warning: Skipping '{file}' — unexpected filename format.")
-                        continue
-                    date_with_suffix = " ".join(file_name_parts[answers_index + 1:])
-                    date = date_with_suffix.removesuffix(".txt").strip()
-                    graded_index = file_name_parts.index("graded")
-                    subject = " ".join(file_name_parts[graded_index + 1:answers_index])
-                    topics = get_topics_and_grades(contents)
-                    grade_data.append({
-                        "filename": file,
-                        "subject": subject,
-                        "date": date,
-                        "topics": topics
-                    })
-            except ValueError:
-                print(f"Warning: Skipping '{file}' — unexpected filename format.")
-    if not grade_data:
-        print("No graded files found. Please remember title formating for graded documents is 'graded subject answers today' (e.g. graded math answers 2026-05-25-11-04-AM.txt)")
-        exit()
-
-    all_records = []
-
     topic_groups = {}
 
-    for file_data in grade_data:
-        date = file_data["date"]
-        for topic, grade in file_data["topics"]:
-            if grade == "Correct":
-                score = 1.0
-            elif grade == "Partially Correct":
-                score = .5
-            else:
-                score = 0.0
-            all_records.append({
-                "subject": file_data["subject"],
+    cursor.execute("""
+        SELECT sessions.date, questions.question_topic, responses.grade
+        FROM sessions
+        JOIN questions ON sessions.id = questions.session_id
+        JOIN responses ON questions.id = responses.question_id
+        ORDER BY sessions.date 
+        """)
+        
+    for row in cursor.fetchall():
+        date = row[0]
+        topic = row[1]
+        grade = row[2]
+
+        if grade == "Correct":
+            score = 1.0
+        elif grade == "Partially Correct":
+            score = .5
+        else:
+            score = 0.0
+        
+        if topic not in topic_groups:
+            topic_groups[topic] = []
+        topic_groups[topic].append({
                 "date": date,
-                "topic": topic,
                 "grade": grade,
                 "score": score
-            })
-            if topic not in topic_groups:
-                topic_groups[topic] = []
-            topic_groups[topic].append({
-                    "date": date,
-                    "grade": grade,
-                    "score": score
-                })
+        })
 
-    averaged_topic_groups = {}
-
-    for topic, records in topic_groups.items():
-        date_groups = {}
-        for record in records:
-            if record["date"] not in date_groups:
-                date_groups[record["date"]] = []
-            date_groups[record["date"]].append(record["score"])
-        
-        averaged = []
-
-        for date, scores in date_groups.items():
-            avg = sum(scores) / len(scores)
-            if avg >= .8:
-                g = "Correct"
-            elif .8 > avg >= .4:
-                g = "Partially Correct"
-            else:
-                g = "Incorrect"
-            averaged.append({"date": date, "score": avg, "grade": g, "count": len(scores)})
-
-        averaged_topic_groups[topic] = averaged
-
-    topic_groups = averaged_topic_groups
 
     report = generate_report(topic_groups)
 
+    if report is None:
+        print("Analytics report failed to generate. Please retry.")
+        exit()
+
     with open(f"analytics report {today}.txt", "w", encoding="utf-8") as f:
         f.write(report)
+        
 
     print(f"Analytics saved to 'analytics report {today}.txt'")
 
